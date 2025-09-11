@@ -1,46 +1,47 @@
 from dotenv import load_dotenv
 import os
-from src.helper import load_pdf_file, filter_to_minimal_docs, text_split, download_hugging_face_embeddings
-from pinecone import Pinecone
-from pinecone import ServerlessSpec 
+from src.helper import load_pdf_files, filter_tp_minimal_docs, text_split, load_embeddings_model
+
+from pinecone import Pinecone, ServerlessSpec
 from langchain_pinecone import PineconeVectorStore
 
+# Load environment variables
 load_dotenv()
 
+PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")   # OpenAI
+COHERE_API_KEY = os.environ.get("COHERE_API_KEY")   # Cohere (if you want to support it too)
 
-PINECONE_API_KEY=os.environ.get('PINECONE_API_KEY')
-OPENAI_API_KEY=os.environ.get('OPENAI_API_KEY')
+# Load and preprocess documents
+extracted= load_pdf_files("data")
+filtered_docs = filter_tp_minimal_docs(extracted)
+text_chunks=text_split(filtered_docs)
 
-os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+# Load embeddings
 
+embeddings = load_embeddings_model()
 
-extracted_data=load_pdf_file(data='data/')
-filter_data = filter_to_minimal_docs(extracted_data)
-text_chunks=text_split(filter_data)
+# Initialize Pinecone client
 
-embeddings = download_hugging_face_embeddings()
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index_name = "medical-chatbot"
 
-pinecone_api_key = PINECONE_API_KEY
-pc = Pinecone(api_key=pinecone_api_key)
+pc = Pinecone(api_key="pcsk_6NrbQW_LinFsGaW8vvdQLaWPnPZXpivZpz4KY9zb1PFq7F7RiHUqUJBdnv5SDg3psoaxzq")  
 
+index_name = "medical-chatbot"
 
-
-index_name = "medical-chatbot"  # change if desired
-
-if not pc.has_index(index_name):
+if index_name not in pc.list_indexes().names():
     pc.create_index(
         name=index_name,
         dimension=384,
         metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+        spec=ServerlessSpec(cloud="aws", region="us-east-1")
     )
 
 index = pc.Index(index_name)
-
-
+# Store docs in Pinecone
 docsearch = PineconeVectorStore.from_documents(
     documents=text_chunks,
     index_name=index_name,
-    embedding=embeddings, 
+    embedding=embeddings,
 )
